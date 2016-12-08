@@ -1,0 +1,309 @@
+```{r echo=FALSE}
+# This chunk contains some setup which we do not want to display in the final
+# document, hence `echo=FALSE` is used.
+# When you’re reading this document, it may be easier to ignore this chunk for
+# now, and continue with the document below, starting at “Introduction”
+
+# Make library loading silent
+library = function (...) suppressMessages(base::library(...))
+
+# This should always be the default. Google for reason if not clear.
+options(stringsAsFactors = FALSE)
+
+# To set the options below.
+library(knitr)
+# For pretty-printed tables.
+library(pander)
+
+panderOptions('table.split.table', Inf)
+panderOptions('table.alignment.default',
+              function (df) ifelse(sapply(df, is.numeric), 'right', 'left'))
+panderOptions('table.alignment.rownames', 'left')
+
+# Disable code re-formatting.
+opts_chunk$set(tidy = FALSE)
+# Enable automatic table reformatting.
+opts_chunk$set(render = function (object, ...) {
+    if (is.data.frame(object) ||
+        is.matrix(object))
+        pander(object, style = 'rmarkdown')
+    else if (isS4(object))
+        show(object)
+    else
+        print(object)
+})
+
+# Color scheme for divergent colors.
+divergent_colors = colorRampPalette(c('#603D71', 'white', '#A4B962'))(30)
+
+```
+
+Genomic analysis using R and knitr
+==================================
+
+Introduction
+------------
+
+This is an example document showing how [knitr][] can make biological analysis
+easier to understand and reproduce. Do make sure to read [the source
+code][source] of this document as well, since it shows how to write knitr source
+code. This document was created using the command
+
+```{r eval=FALSE}
+knitr::knit2html('deseq.rmd')
+```
+
+The following shows the protocol, execution and results of a
+simple gene expression analysis.
+
+The data used in this project is from [*Schmitt, Rudolph & al.* (Genome Res
+2014)][Schmitt2014]. We use [DESeq2][] to analyse changes of tRNA gene
+expression across two tissues and several stages of mouse embryonic development.
+For a full description of the data, please refer to the above-mentioned paper.
+
+First look at the data
+----------------------
+
+To start off the analysis, let’s examine the data. We can do this in a terminal
+and/or third party applications but we can also do it directly in R. The data
+is stored in the `data` subdirectory:
+
+```{r}
+dir('data')
+```
+
+Let’s have a look at the library design.
+
+```{r}
+design = read.delim('./data/library-design.tsv', header = FALSE,
+                    col.names = c('Library', 'Antibody', 'Tissue', 'Stage'))
+head(design)
+```
+
+We’re dealing with a ChIP-seq dataset, which was created using an antibody for
+a subunit of the polymerase III complex. The study by *Schmitt, Rudolph & al.*
+used active binding of pol III as a measure of gene expression activity for
+tRNA genes, since it is known that binding of pol III to tRNA gene regions
+correlates very well with gene expression strength.
+
+So although this is a ChIP-seq dataset, the read counts actually quantify gene
+expression, more akin to RNA-seq data. Since we are interested in comparing
+gene expression between different conditions, the input libraries are not
+relevant for now, so we filter them out.
+
+For data manipulation, I recommend the excellend [dplyr][] library. It’s fast
+becoming established as a *de facto* standard, and it produces very readable
+code by chaining several operations on the same data via the `%>%` operator. For
+instance, the following simply filters our data frame by a given criterion.
+
+```{r}
+library(dplyr)
+
+design = design %>% filter(Antibody != 'Input')
+head(design)
+```
+
+Next, we load the actual count data of the sequencing libraries, and drop all
+the input libraries right away. Since there are many columns, we only print a
+subset to get an idea of the data layout:
+
+```{r}
+counts = read.delim('./data/trna-counts.tsv', row.names = 1)
+lib_indices = match(colnames(counts), design$Library)
+counts = counts[, lib_indices]
+counts[1 : 6, 1 : 6]
+```
+
+DESeq
+-----
+
+Now it’s time to bring out a library to work with expression count data:
+
+```{r}
+library(DESeq2)
+```
+
+For a detailed description of DESeq2, refer to the vignette, using the R
+command
+
+```{r eval=FALSE}
+vignette('DESeq2')
+```
+
+In order to compare count data of different libraries, we need to normalise
+their counts to account for library size effects. In order to see why this is
+the case, let’s look at the distribution of the raw counts across libraries:
+
+```{r nice=TRUE, fig.width=9}
+# Color the libraries by their tissue identity.
+tissue_colors = c(brain = '#C47E1F', liver = '#7C0D0C')
+
+layout(matrix(c(1, 2), nrow = 1), widths = c(0.8, 0.2))
+par(mar = c(5, 4, 4, 2) + 0.1)
+# Add pseudocount 1, because zeros would break log y axis.
+boxplot(counts + 1, las = 2, log = 'y', col = tissue_colors[design$Tissue])
+par(mar = c(5, 0, 4, 2) + 0.1)
+plot.new()
+legend('center', bty = 'n', legend = names(tissue_colors), fill = tissue_colors)
+```
+
+… the count distributions differ drastically between libraries! This is due to
+technical variation during sequencing that we cannot influence. Normalisation
+takes care of this. But this requires us first to put the data into a DESeq2
+analysis object.
+
+```{r}
+de_count_data = DESeqDataSetFromMatrix(counts, design, design = ~Tissue)
+```
+
+The last parameter in the above call already specifies what we are going to
+contrast later. We ignore it for now.
+
+Now we can run the library size normalisation on this.
+
+```{r nice=TRUE, fig.width=9}
+de_count_data = estimateSizeFactors(de_count_data)
+counts = counts(de_count_data, normalized = TRUE)
+# DESeq2 removes column names, we need to re-set them.
+colnames(counts) = design$Library[lib_indices]
+
+layout(matrix(c(1, 2), nrow = 1), widths = c(0.8, 0.2))
+par(mar = c(5, 4, 4, 2) + 0.1)
+# Use global minimum value > 0 as pseudocount.
+eps = min(counts[counts > 0])
+boxplot(counts + eps, las = 2, log = 'y', col = tissue_colors[design$Tissue])
+par(mar = c(5, 0, 4, 2) + 0.1)
+plot.new()
+legend('center', bty = 'n', legend = names(tissue_colors), fill = tissue_colors)
+```
+
+Comparison between samples
+--------------------------
+
+Next, we can calculate similarities between our samples and plot those.
+
+```{r}
+library(gplots)
+correlated = cor(counts, method = 'spearman')
+heatmap.2(correlated, ColSideColors = tissue_colors[design$Tissue])
+```
+
+As the horizontal colour bar at the top indicates, tRNA gene expression
+perfectly separates the libraries according to their tissue identity. We can
+visualise the variance of the gene expression by performing principal components
+analysis on this data set:
+
+```{r nice=TRUE}
+pcs = prcomp(correlated)
+explained_variance = summary(pcs)$importance['Proportion of Variance', ]
+plot(PC2 ~ PC1, pcs$x,
+     col = tissue_colors[design$Tissue], pch = 1,
+     xlab = sprintf('PC1 (%.0f%% variance)', explained_variance[1] * 100),
+     ylab = sprintf('PC2 (%.0f%% variance)', explained_variance[2] * 100))
+legend('topleft', bty = 'n', legend = names(tissue_colors),
+       fill = tissue_colors)
+```
+
+Next, it makes sense to look at which genes cause this difference **between the
+tissues** by performing differential expression analysis using tissue identity
+of each library as the contrast (this is what we specified with the `design =
+~Tissue` argument earlier).
+
+```{r nice=TRUE}
+dds = DESeq(de_count_data)
+plotDispEsts(dds)
+res = results(dds)
+plotMA(res, alpha = 0.05)
+```
+
+The DESeq2 vignette explains the function of these plots in detail; the
+important part for us are the red dots in the second plot – these correspond to
+significantly differentially expressed tRNA genes, at the 5% significance level.
+The number of these differentially expressed genes is `r sum(! is.na(res$padj) &
+res$padj <= 0.05)` (out of `r nrow(res)`). The top hits (by FDR-adjusted
+*p*-value) are:
+
+```{r}
+res = res %>% as.data.frame() %>% add_rownames('Gene')
+res %>% arrange(padj) %>%
+    select(Gene,
+           `Base mean` = baseMean,
+           `log2 Fold change` = log2FoldChange,
+           `Adjusted p` = padj) %>%
+    head()
+```
+
+Relating the data to biological features
+----------------------------------------
+
+We can now use the tRNA gene annotation to find out which anticodons are
+over-represented amongst the significantly differentially expressed genes.
+
+```{r}
+annotation = read.delim('./data/trna-annotation.tsv', header = FALSE)
+
+# The data is messy. Remove redundant spaces etc.
+annotation = annotation %>%
+    mutate(Gene = paste0(V1, sub(' ', '', V2))) %>%
+    select(Gene, Codon = V7, AA = V6, Chr = V1, Start = V4, End = V5) %>%
+    mutate(AA = gsub(' ', '', AA))
+
+head(annotation)
+```
+
+To find the number of differentially expressed genes per codon, we merge these
+two tables and group by codon type.
+
+```{r}
+differential_codons = inner_join(res, annotation, by = 'Gene') %>%
+    filter(! is.na(padj) & padj < 0.05) %>%
+    group_by(Codon) %>%
+    summarize(AA = first(AA),
+              brain = sum(log2FoldChange > 0),
+              liver = sum(log2FoldChange < 0))
+
+head(differential_codons)
+```
+
+This table shows the number of overrepresented genes for brain and liver,
+respectively.
+
+Let’s visualise this more nicely. For that, we need to re-shape the data and
+pass it to `ggplot`, which provides more powerful visualisation capabilities.
+
+```{r}
+library(reshape2)
+codons_plot_data = differential_codons %>%
+    mutate(liver = -liver) %>%
+    melt(id.vars = c('Codon', 'AA'), variable.name = 'Tissue',
+         value.name = 'Value')
+
+library(ggplot2)
+ggplot(codons_plot_data,
+       aes(x = Codon, xend = Codon, y = 0, yend = Value, color = Tissue)) +
+    geom_segment(size = 3) +
+    coord_flip() +
+    scale_color_manual(values = tissue_colors) +
+    theme_bw()
+```
+
+We can also group the anticodons by their corresponding amino acid:
+
+```{r}
+ggplot(codons_plot_data,
+       aes(x = Codon, xend = Codon, y = 0, yend = Value, color = Tissue)) +
+    geom_segment(size = 3) +
+    facet_wrap(~AA, scales = 'free_x') +
+    scale_color_manual(values = tissue_colors) +
+    theme_bw()
+```
+
+Closing remark
+--------------
+
+At this point we would start investigating the differences we see between
+individual anticodons and amino acid types, write up a paper about it, and
+submit it to *Cell*. Good luck.
+
+(Thanks to [Nils][] and [Maria][] for help with ggplot2, which I know nothing
+about.)
