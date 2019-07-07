@@ -1,0 +1,43 @@
+---
+title: 'SpliceNeo: spliceGraphs'
+author: "Naomi Yudanin"
+output:
+  html_notebook:
+    code_folding: hide
+    highlight: tango
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '1'
+  pdf_document:
+    toc: yes
+    toc_depth: '1'
+---
+---
+
+## ComplexHeatmap
+
+```{r packages, message=FALSE, warning=FALSE}
+library(circlize)
+library(dendsort)
+library(colorspace)
+library(ComplexHeatmap)
+
+divergingx_palettes(n = 12, plot = TRUE)
+```
+```{r}
+col_fun = colorRamp2(c(0, 0.25, 0.5, 0.75, 1), c("pink4","pink","white", "green3","darkgreen"))
+col_fun(seq(-3, 3))
+mat <- sgvc_AS[1:25,-1]
+rownames(mat) <- sgvc_AS[1:25,1]
+Heatmap(mat, cluster_columns = TRUE, col=col_fun, rect_gp = gpar(col = "white", lwd = 0.5))
+
+
+dend = dendsort(hclust(dist(mat)))
+Heatmap(mat, cluster_columns = TRUE, cluster_rows = dend, row_names_gp = gpar(fontsize = 8), row_names_side = "left",col=col_fun, rect_gp = gpar(col = "white", lwd = 0.5), width = unit(4, "cm"), height = unit(8, "cm"))
+```
+
