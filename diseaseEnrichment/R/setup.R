@@ -1,0 +1,6 @@
+usethis::use_package("DOSE", type = "Imports")
+usethis::use_package("clusterProfiler", type = "Imports")
+usethis::use_package("AnnotationDbi", type = "Imports")
+usethis::use_package("enrichplot", type = "Imports")
+usethis::use_package("org.Hs.eg.db", type = "Imports")
+usethis::use_package_doc()

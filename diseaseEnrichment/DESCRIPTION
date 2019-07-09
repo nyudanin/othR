@@ -1,0 +1,22 @@
+Package: diseaseEnrichment
+Title: Disease Enrichment 
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Naomi",
+           family = "Yudanin",
+           role = c("aut", "cre"),
+           email = "nyudanin@envisagenics.com")
+Description: Disease enrichment from a list of genes.
+License: GPL-3
+Suggests: 
+    testthat (>= 2.1.0)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 6.1.1
+Imports: 
+    DOSE,
+    clusterProfiler,
+    AnnotationDbi,
+    enrichplot,
+    org.Hs.eg.db

@@ -1,0 +1,562 @@
+---
+title: "Disease Enrichment"
+params: 
+  genelist: "/mnt/nfs1/SpliceViz/diseaseEnrichment/input/AD.OTgeneList.txt"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+---
+
+```{r global, include=FALSE}
+packages <- c("org.Hs.eg.db", "AnnotationDbi", "DOSE", "clusterProfiler", "enrichplot", "ggplot2" )
+loadPackages <- function(packages) {
+  for (package_name in packages)
+  {
+    library(package_name,
+            character.only = TRUE,
+            quietly = TRUE)
+  }
+}
+
+
+loadPackages(packages)
+library(ggplot2)
+library(scales)
+library(ggpubr)
+
+purples <- c(
+  "Purple" = "#8d5393",
+  "Lavender" = "#b37ab5",
+  "Gray" = "#BDBDBD"
+)
+reds <- c(
+  "Peach" = "#f69788",
+  "Guava" = "#c16177",
+  "Pinot" = "#91425d"
+)
+
+blues <- c(
+  "Teal" = "#17a2b8",
+  "Blue" = "#337ab7",
+  "Gray" = "#BDBDBD"
+)
+
+grays <-
+  c(
+    "Dark Gray" = "#58595b",
+    "Gray" = "#BDBDBD",
+    "Light Gray" = "#9f9f9f"
+  )
+
+allcolors <- c(
+  "Purple" = "#8d5393",
+  "Lavender" = "#b37ab5",
+  "Gray" = "#BDBDBD",
+  "Peach" = "#f69788",
+  "Guava" = "#c16177",
+  "Pinot" = "#91425d",
+  "Teal" = "#17a2b8",
+  "Blue" = "#337ab7",
+  "Dark Gray" = "#58595b",
+  "Light Gray" = "#9f9f9f"
+)
+
+purples_grays_blues <- c(
+  "Purple" = "#8d5393",
+  "Lavender" = "#b37ab5",
+  "Gray" = "#BDBDBD",
+  "Teal" = "#17a2b8",
+  "Blue" = "#337ab7"
+)
+
+purples_blues <- c(
+  "Purple" = "#8d5393",
+  "Lavender" = "#b37ab5",
+  "Teal" = "#17a2b8",
+  "Blue" = "#337ab7"
+)
+purples_grays <- c(
+  "Purple" = "#8d5393",
+  "Lavender" = "#b37ab5",
+  "Gray" = "#BDBDBD",
+  "Light Gray" = "#9f9f9f"
+)
+
+
+envisagenics_palettes <-
+  list(
+    purples,
+    reds,
+    blues,
+    grays,
+    purples_grays_blues,
+    purples_blues,
+    purples_grays,
+    allcolors
+  )
+
+names(envisagenics_palettes) <-
+  c(
+    "purples",
+    "reds",
+    "blues",
+    "grays",
+    "purples_grays_blues",
+    "purples_blues",
+    "purples_grays",
+    "allcolors"
+  )
+
+rm(
+  purples,
+  reds,
+  blues,
+  grays,
+  purples_grays_blues,
+  purples_blues,
+  purples_grays,
+  allcolors
+)
+
+
+envisagenics_cols <- function(...) {
+  cols <- c(...)
+
+  if (is.null(cols))
+    return (envisagenics_palettes)
+
+  envisagenics_palettes[cols]
+}
+
+envisagenics_pal <-
+  function(palette = "purples",
+           reverse = FALSE,
+           ...) {
+    pal <- envisagenics_palettes[[palette]]
+
+    if (reverse)
+      pal <- rev(pal)
+
+    colorRampPalette(pal, ...)
+  }
+
+#' Color scale constructor for envisagenics colors
+scale_color_envisagenics <-
+  function(palette = "purples",
+           discrete = TRUE,
+           reverse = FALSE,
+           ...) {
+    pal <- envisagenics_pal(palette = palette, reverse = reverse)
+
+    if (discrete) {
+      discrete_scale("color", paste0("envisagenics_", palette), palette = pal, ...)
+    } else {
+      scale_color_gradientn(colours = pal(256), ...)
+    }
+  }
+
+#' Fill scale constructor for envisagenics colors
+scale_fill_envisagenics <-
+  function(palette = "purples",
+           discrete = TRUE,
+           reverse = FALSE,
+           ...) {
+    pal <- envisagenics_pal(palette = palette, reverse = reverse)
+
+    if (discrete) {
+      discrete_scale("fill", paste0("envisagenics_", palette), palette = pal, ...)
+    } else {
+      scale_fill_gradient(colours = pal(256), ...)
+    }
+  }
+
+##%######################################################%##
+#                                                          #
+####                    Custom theme                    ####
+#                                                          #
+##%######################################################%##
+
+
+theme_envisagenics <- theme_get()
+theme_envisagenics <- theme_replace() + theme_pubclean()
+theme_envisagenics <- theme_replace() +
+  theme(
+    plot.subtitle = element_text(colour = NA, family = "Helvetica"),
+    plot.caption = element_text(colour = NA, family = "Helvetica",
+                                hjust = 0),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid.major.y = element_line(linetype = "dashed", size = 0.1, color = "gray29"),
+    panel.grid.minor = element_line(colour = NA,
+                                    size = 0),
+    axis.title = element_text(family = "Helvetica",
+                              size = 12,
+                              colour = "gray29",
+                              hjust = 0.55
+    ),
+    axis.text = element_text(size = 10, family = "Helvetica"),
+    axis.text.x = element_text(size = 10,
+                               vjust = 0, family = "Helvetica"),
+    axis.text.y = element_text(size = 10,
+                               vjust = 0, family = "Helvetica"),
+    plot.title = element_text(
+      size = 12,
+      colour = "gray29",
+      vjust = 0, family = "Helvetica"
+    ),
+    legend.text = element_text(colour = "gray29", family = "Helvetica"),
+    legend.title = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    legend.key = element_rect(colour = NA),
+    legend.background = element_rect(fill = NA),
+    strip.background = element_blank(),
+    strip.text.x = element_text(colour = "gray29", family = "Helvetica")
+  )
+
+
+theme_set(theme_envisagenics)
+
+geneListFile <- params$genelist
+
+deGeneList <-
+  utils::read.table(
+    geneListFile,
+    quote = "\"",
+    comment.char = "",
+    stringsAsFactors = FALSE
+  )
+
+gene <- deGeneList$V1
+entrez <- org.Hs.eg.db::org.Hs.eg.db
+columns <- AnnotationDbi::columns(entrez)[grep("ENTREZ|ENSEMBL", AnnotationDbi::columns(entrez))]
+entrez_geneId <- AnnotationDbi::select(entrez,
+                                       keys = gene,
+                                       keytype = "SYMBOL",
+                                       columns = columns)
+entrez_geneId <- unique(entrez_geneId$ENTREZID)
+
+entrez_de <- DOSE::enrichDO(
+  gene  = entrez_geneId,
+  ont           = "DO",
+  pvalueCutoff  = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize     = 5,
+  maxGSSize     = 500,
+  qvalueCutoff  = 0.2,
+  readable      = TRUE
+)
+
+entrez_ncg <- DOSE::enrichNCG(
+  entrez_geneId,
+  pvalueCutoff  = 1,
+  pAdjustMethod = "BH",
+  minGSSize     = 0,
+  maxGSSize     = 500,
+  qvalueCutoff  = 1,
+  readable      = TRUE
+)
+
+entrez_dgn <- DOSE::enrichDGN(
+  entrez_geneId,
+  pvalueCutoff  = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize     = 5,
+  maxGSSize     = 500,
+  qvalueCutoff  = 0.2,
+  readable      = TRUE
+)
+
+write.csv2(ggplot2::fortify(entrez_dgn, order = TRUE, showCategory = 100),
+           file = paste0(gsub(".txt", "_dgn.txt", geneListFile)))
+write.csv2(ggplot2::fortify(entrez_de, order = TRUE, showCategory = 100),
+           file = paste0(gsub(".txt", "_de.txt", geneListFile)))
+write.csv2(ggplot2::fortify(entrez_ncg, order = TRUE, showCategory = 100),
+           file = paste0(gsub(".txt", "_ncg.txt", geneListFile)))
+
+##DGN
+dgn_cnetplot <- clusterProfiler::cnetplot(entrez_dgn, layout = "kk") +
+  theme_void(base_size = 8, base_family = "Helvetica") +
+  scale_color_envisagenics(discrete = TRUE) +
+  theme(legend.position = "none")
+
+dgn_dotplot <- clusterProfiler::dotplot(entrez_dgn,
+                         x = "Count",
+                         showCategory = 30,
+                         color = "p.adjust") +
+  theme_set(theme_envisagenics) +
+  scale_color_envisagenics(discrete = FALSE) +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 8),
+    axis.title.x = element_text(size = 10)
+  )
+
+dgn_heatplot <- clusterProfiler::heatplot(entrez_dgn, showCategory = 30) +
+  geom_tile(
+    aes(fill = "p.adjust"),
+    show.legend = FALSE,
+    color = envisagenics_palettes$purples[1],
+    fill = envisagenics_palettes$purples[2]
+  ) +
+  theme_set(theme_envisagenics) +
+  theme(axis.text.x = element_text(
+    angle = -90,
+    size = 5,
+    hjust = 0
+  ))
+
+dgn_emapplot <- clusterProfiler::emapplot(entrez_dgn, showCategory = 30, color = "p.adjust") +
+  theme_void(base_size = 8, base_family = "Helvetica") +
+  scale_color_envisagenics(discrete = FALSE) +
+  theme(legend.position = "right")
+
+# dgn_pmcplot <- enrichplot::pmcplot(entrez_dgn@result$Description[1:10], 2014:2019, proportion = FALSE) +
+#   theme_set(theme_envisagenics) +
+#   scale_color_envisagenics(palette = "allcolors", discrete = TRUE)
+
+pdf(paste0(gsub(".txt", "_dgn_cnetplot.pdf", geneListFile)), w = 6, h = 6)
+dgn_cnetplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_dgn_dotplot.pdf", geneListFile)))
+dgn_dotplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_dgn_heatplot.pdf", geneListFile)))
+dgn_heatplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_dgn_emapplot.pdf", geneListFile)))
+dgn_emapplot
+dev.off()
+
+# pdf(paste0(gsub(".txt", "_dgn_pubmed.pdf", geneListFile)))
+# dgn_pmcplot
+# dev.off()
+
+##de
+de_cnetplot <- clusterProfiler::cnetplot(entrez_de, layout = "kk") +
+  theme_void(base_size = 8, base_family = "Helvetica") +
+  scale_color_envisagenics(discrete = TRUE) +
+  theme(legend.position = "none")
+
+de_dotplot <- clusterProfiler::dotplot(entrez_de,
+                         x = "Count",
+                         showCategory = 30,
+                         color = "p.adjust") +
+  theme_set(theme_envisagenics) +
+  scale_color_envisagenics(discrete = FALSE) +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 8),
+    axis.title.x = element_text(size = 10)
+  )
+
+de_heatplot <- clusterProfiler::heatplot(entrez_de, showCategory = 30) +
+  geom_tile(
+    aes(fill = "p.adjust"),
+    show.legend = FALSE,
+    color = envisagenics_palettes$purples[1],
+    fill = envisagenics_palettes$purples[2]
+  ) +
+  theme_set(theme_envisagenics) +
+  theme(axis.text.x = element_text(
+    angle = -90,
+    size = 5,
+    hjust = 0
+  ))
+
+de_emapplot <- clusterProfiler::emapplot(entrez_de, showCategory = 30, color = "p.adjust") +
+  theme_void(base_size = 8, base_family = "Helvetica") +
+  scale_color_envisagenics(discrete = FALSE) +
+  theme(legend.position = "right")
+
+# de_pmcplot <- enrichplot::pmcplot(entrez_de@result$Description[1:10], 2014:2019, proportion = FALSE) +
+#   theme_set(theme_envisagenics) +
+#   scale_color_envisagenics(palette = "allcolors", discrete = TRUE)
+
+pdf(paste0(gsub(".txt", "_de_cnetplot.pdf", geneListFile)), w = 6, h = 6)
+de_cnetplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_de_dotplot.pdf", geneListFile)))
+de_dotplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_de_heatplot.pdf", geneListFile)))
+de_heatplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_de_emapplot.pdf", geneListFile)))
+de_emapplot
+dev.off()
+
+# pdf(paste0(gsub(".txt", "_de_pubmed.pdf", geneListFile)))
+# de_pmcplot
+# dev.off()
+
+##ncg
+ncg_cnetplot <- clusterProfiler::cnetplot(entrez_ncg, layout = "kk") +
+  theme_void(base_size = 8, base_family = "Helvetica") +
+  scale_color_envisagenics(discrete = TRUE) +
+  theme(legend.position = "none")
+
+ncg_dotplot <- clusterProfiler::dotplot(entrez_ncg,
+                         x = "Count",
+                         showCategory = 30,
+                         color = "p.adjust") +
+  theme_set(theme_envisagenics) +
+  scale_color_envisagenics(discrete = FALSE) +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 8),
+    axis.title.x = element_text(size = 10)
+  )
+
+ncg_heatplot <- clusterProfiler::heatplot(entrez_ncg, showCategory = 30) +
+  geom_tile(
+    aes(fill = "p.adjust"),
+    show.legend = FALSE,
+    color = envisagenics_palettes$purples[1],
+    fill = envisagenics_palettes$purples[2]
+  ) +
+  theme_set(theme_envisagenics) +
+  theme(axis.text.x = element_text(
+    angle = -90,
+    size = 5,
+    hjust = 0
+  ))
+
+ncg_emapplot <- clusterProfiler::emapplot(entrez_ncg, showCategory = 30, color = "p.adjust") +
+  theme_void(base_size = 8, base_family = "Helvetica") +
+  scale_color_envisagenics(discrete = FALSE) +
+  theme(legend.position = "right")
+
+# ncg_pmcplot <- enrichplot::pmcplot(entrez_ncg@result$ncgscription[1:10], 2014:2019, proportion = FALSE) +
+#   theme_set(theme_envisagenics) +
+#   scale_color_envisagenics(palette = "allcolors", discrete = TRUE)
+
+pdf(paste0(gsub(".txt", "_ncg_cnetplot.pdf", geneListFile)), w = 6, h = 6)
+ncg_cnetplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_ncg_dotplot.pdf", geneListFile)))
+ncg_dotplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_ncg_heatplot.pdf", geneListFile)))
+ncg_heatplot
+dev.off()
+
+pdf(paste0(gsub(".txt", "_ncg_emapplot.pdf", geneListFile)))
+ncg_emapplot
+dev.off()
+
+# pdf(paste0(gsub(".txt", "_ncg_pubmed.pdf", geneListFile)))
+# ncg_pmcplot
+# dev.off()
+```
+
+
+DisGeNET Enrichment
+=======================================================================
+
+Column
+-------------------------------------
+
+### CNET plot
+```{r}
+dgn_cnetplot
+```
+
+### Dotplot
+```{r}
+dgn_dotplot
+```
+
+Column
+-------------------------------------
+
+### Heatplot
+```{r}
+dgn_heatplot
+```
+
+### eMap Plot
+```{r}
+dgn_emapplot
+```
+<!-- ### Pubmed Citations Plot -->
+<!-- ```{r} -->
+<!-- dgn_pmcplot -->
+<!-- ``` -->
+
+
+DiseaseOntology Enrichment
+=======================================================================
+
+Column
+-------------------------------------
+
+### CNET plot
+```{r}
+de_cnetplot
+```
+
+### Dotplot
+```{r}
+de_dotplot
+```
+
+Column
+-------------------------------------
+
+### Heatplot
+```{r}
+de_heatplot
+```
+
+### eMap Plot
+```{r}
+de_emapplot
+```
+<!-- ### Pubmed Citations Plot -->
+<!-- ```{r} -->
+<!-- de_pmcplot -->
+<!-- ``` -->
+
+Network of Cancer Genes Enrichment
+=======================================================================
+
+Column
+-------------------------------------
+
+### CNET plot
+```{r}
+ncg_cnetplot
+```
+
+### Dotplot
+```{r}
+ncg_dotplot
+```
+
+Column
+-------------------------------------
+
+### Heatplot
+```{r}
+ncg_heatplot
+```
+
+### eMap Plot
+```{r}
+ncg_emapplot
+```
+<!-- ### Pubmed Citations Plot -->
+<!-- ```{r} -->
+<!-- ncg_pmcplot -->
+<!-- ``` -->
+
+
