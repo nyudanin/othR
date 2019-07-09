@@ -10,7 +10,3 @@ render_report <-
     )
   }
 
-?flexdashboard::flex_dashboard()
-
-
-find_external_resources(input_file, encoding = "UTF-8")
