@@ -1,7 +1,7 @@
 ---
 title: "Disease Enrichment"
 params: 
-  genelist: "/mnt/nfs1/SpliceViz/diseaseEnrichment/input/AD.OTgeneList.txt"
+  genelist: "input/selectedTESLApeptides.txt"
 output: 
   flexdashboard::flex_dashboard:
     vertical_layout: fill
@@ -306,7 +306,7 @@ dgn_heatplot <- clusterProfiler::heatplot(entrez_dgn, showCategory = 30) +
     hjust = 0
   ))
 
-dgn_emapplot <- clusterProfiler::emapplot(entrez_dgn, showCategory = 30, color = "p.adjust") +
+dgn_emapplot <- clusterProfiler::emapplot(entrez_dgn, color = "p.adjust") +
   theme_void(base_size = 8, base_family = "Helvetica") +
   scale_color_envisagenics(discrete = FALSE) +
   theme(legend.position = "right")
@@ -336,7 +336,7 @@ dev.off()
 # dev.off()
 
 ##de
-de_cnetplot <- clusterProfiler::cnetplot(entrez_de, layout = "kk") +
+de_cnetplot <- clusterProfiler::cnetplot(entrez_de) +
   theme_void(base_size = 8, base_family = "Helvetica") +
   scale_color_envisagenics(discrete = TRUE) +
   theme(legend.position = "none")
@@ -367,7 +367,7 @@ de_heatplot <- clusterProfiler::heatplot(entrez_de, showCategory = 30) +
     hjust = 0
   ))
 
-de_emapplot <- clusterProfiler::emapplot(entrez_de, showCategory = 30, color = "p.adjust") +
+de_emapplot <- clusterProfiler::emapplot(entrez_de, color = "p.adjust") +
   theme_void(base_size = 8, base_family = "Helvetica") +
   scale_color_envisagenics(discrete = FALSE) +
   theme(legend.position = "right")

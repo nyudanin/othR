@@ -1,48 +1,17 @@
-installPackages <- function(packages) {
-  k <- packages[!(packages %in% installed.packages()[, "Package"])]
-  lib.loc <- as.data.frame(library()[2])
-  lib.loc <- levels(lib.loc$results.LibPath)
-  if (length(k) > 0)
-  {
-    BiocManager::install(k, lib.loc = lib.loc)
-  }
-}
-loadPackages <- function(packages) {
-  for (package_name in packages)
-  {
-    library(package_name,
-            character.only = TRUE,
-            quietly = TRUE)
-  }
-}
-packages <- c("org.Hs.eg.db", "AnnotationDbi", "DOSE", "clusterProfiler", "enrichplot", "ggplot2" )
-# installPackages(packages)
-loadPackages(packages)
 
 source('/mnt/nfs1/SpliceViz/diseaseEnrichment/R/plotTheme.R')
+if(!interactive()) {
+  input <- as.character(readline("Enter the gene list file path: "))
+  assertthat::assert_that(assertthat::has_extension(input, "txt"), msg = "Gene list must be provided as a text file ending in .txt \n")
+  deGeneList <-
+    utils::read.table(
+      input,
+      quote = "\"",
+      comment.char = "",
+      stringsAsFactors = FALSE
+    )
+}
 
-# if(interactive()) {
-#   input <- as.character(readline("Enter the gene list file path: "))
-#   if (isTRUE(all.equal(0, grep("txt", input))))
-#     cat("Gene list must be provided as a text file ending in .txt \n")
-#   geneListFile <- as.character(input)
-# }
-
-# if (isTRUE(all.equal("", input))){
-#   cat("No gene list provided! Continuing with a sample list... \n")
-#   geneListFile <- list.files(path = "example", pattern = ".txt", full.names = TRUE)[1]
-# } else geneListFile <- geneListFile
-
-
-
-
-deGeneList <-
-  utils::read.table(
-    geneListFile,
-    quote = "\"",
-    comment.char = "",
-    stringsAsFactors = FALSE
-  )
 
 gene <- deGeneList$V1
 entrez <- org.Hs.eg.db::org.Hs.eg.db
